@@ -1,19 +1,19 @@
-#define _TASK_THREAD_SAFE
-#include <TaskScheduler.h>
-
-#include <ArduinoModbus.h>
-
 #include <SPI.h>
 #include <Adafruit_NeoPixel.h>
 #include <Ethernet.h>
 
-#define LIGHT_PIN 1
-#define BUTTON_PIN 2
+#include <TaskScheduler.h>
 
-#define BASE_TASK_FREQ TASK_MS * 10 // 20 ms -> 50Hz
+#include <ArduinoModbus.h>
 
-#define MODBUS_SERVER_INT BASE_TASK_FREQ * 2
-#define IO_DAEMON_INT BASE_TASK_FREQ 
+#define NEO_PIXEL_PIN 8
+
+#define MAX_NUM_CLIENTS 2 // Max num clients in 4
+
+#define BASE_FREQ TASK_MS * 50 // 50ms -> 40Hz
+
+#define MODBUS_SERVER_INT BASE_FREQ
+#define MODBUS_CLIENT_INT BASE_FREQ / MAX_NUM_CLIENTS  // freq scales with the number of clients, more clients most go faster
 
 #define ENET_SERVER_PORT 502
 
@@ -28,10 +28,20 @@ ModbusTCPServer modbusTCPServer;
 
 Scheduler runner;
 
-void modbuser_serer_callback();
+
+typedef _server_data{
+  uint8_t num_connected = 0, current_client = 0;
+  EthernetClients clients[MAX_NUM_CLIENTS];
+}ServerData_t;
+
+void modbus_server_callback();
+void modbus_client_callback();
+
+void add_client();
+void remove_client(uint8_t id);
 
 Task modbus_server_task(MODBUS_SERVER_INT, TASK_FOREVER, &modbuser_serer_callback, &runner);
-Task io_daemon_task(IO_DAEMON_INT)
+Task modbus_client_task(MODBUS_CLIENT_INT, TASK_FOREVER, &modbus_client_callback, &runner);
 
 void setup() {
   // start the Ethernet connection and the server:
@@ -70,5 +80,34 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
+  runner.execute();
+}
 
+void add_client(){
+  return;
+}
+
+void remove_client(uint8_t id){
+  // remove requested client
+  /* 
+  reduce list size to and ensure that all active ids are in the lowest
+  possible spot in the array
+  */
+  return;
+}
+
+void modbus_server_callback(){
+  // check if there are any clients waiting
+  // assign the client to a location in the struct
+  // enable the client task if num_clients > 1
+  // if too many clients ignore and loop
+  return;
+}
+
+void modbus_client_callback(){
+  // check which client we are checking
+  // is client still connected? if no close and remove
+  // service request from client
+  // 
+  return;
 }
