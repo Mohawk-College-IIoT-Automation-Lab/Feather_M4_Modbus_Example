@@ -2,20 +2,33 @@
 #include <Adafruit_NeoPixel.h>
 #include <Ethernet.h>
 
-#include <TaskScheduler.h>
-
 #include <ArduinoModbus.h>
 
 #define NEO_PIXEL_PIN 8
-
-#define MAX_NUM_CLIENTS 2 // Max num clients in 4
-
-#define BASE_FREQ TASK_MS * 50 // 50ms -> 40Hz
-
-#define MODBUS_SERVER_INT BASE_FREQ
-#define MODBUS_CLIENT_INT BASE_FREQ / MAX_NUM_CLIENTS  // freq scales with the number of clients, more clients most go faster
-
 #define ENET_SERVER_PORT 502
+
+#define UID_REG 40001
+
+#define MAC_ADDR_0_REG 40002
+#define MAC_ADDR_1_REG 40003
+#define MAC_ADDR_2_REG 40004
+#define MAC_ADDR_3_REG 40005
+#define MAC_ADDR_4_REG 40006
+#define MAC_ADDR_LENGTH 5
+
+#define IP_ADDR_0_REG 40007
+#define IP_ADDR_1_REG 40008
+#define IP_ADDR_2_REG 40009
+#define IP_ADDR_3_REG 40010
+#define IP_ADDR_LENGTH 4
+
+#define ENABLE_COIL 20001
+#define BRIGHTNESS_INPUT_REG 30002
+#define RED_INPUT_REG 30003
+#define GREEN_INPUT_REG 30004
+#define BLUE_INPUT_REG 30005
+#define COLOR_INPUT_REG RED_INPUT_REG
+#define COLOR_INPUT_REG_LENGTH 3
 
 const uint8_t ip_addr[] = {192, 168, 1, 177}; 
 byte mac[] = {
@@ -24,27 +37,20 @@ byte mac[] = {
 IPAddress ip((const uint8_t *)&ip_addr);
 
 EthernetServer ethServer(ENET_SERVER_PORT);
+EthernetClient ethClient;
 ModbusTCPServer modbusTCPServer;
 
-Scheduler runner;
+Adafruit_NeoPixel pixel(1, NEO_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
-
-typedef _server_data{
-  uint8_t num_connected = 0, current_client = 0;
-  EthernetClients clients[MAX_NUM_CLIENTS];
-}ServerData_t;
-
-void modbus_server_callback();
-void modbus_client_callback();
-
-void add_client();
-void remove_client(uint8_t id);
-
-Task modbus_server_task(MODBUS_SERVER_INT, TASK_FOREVER, &modbuser_serer_callback, &runner);
-Task modbus_client_task(MODBUS_CLIENT_INT, TASK_FOREVER, &modbus_client_callback, &runner);
+uint8_t prev_brightness = 0, prev_r = 0, prev_g = 0, prev_b = 0, prev_en = 0, count = 0;
 
 void setup() {
   // start the Ethernet connection and the server:
+  pixel.begin();
+  pixel.setPixelColor(0, 255, 0, 0);
+  pixel.setBrightness(64);
+  pixel.show();
+
   Ethernet.begin(mac, ip);
 
   // Check for Ethernet hardware present
@@ -67,47 +73,68 @@ void setup() {
     while (1);
   }
 
-  // configure the LED
-  pinMode(LIGHT_PIN, OUTPUT);
-  digitalWrite(LIGHT_PIN, LOW);
-
   // configure a single coil at address 0x00
-  modbusTCPServer.configureCoils(0x00, 1);
+  modbusTCPServer.configureHoldingRegisters(UID_REG, 1);
+  modbusTCPServer.configureHoldingRegisters(MAC_ADDR_0_REG, MAC_ADDR_LENGTH);
+  modbusTCPServer.configureHoldingRegisters(IP_ADDR_0_REG, IP_ADDR_LENGTH);
 
+  modbusTCPServer.configureDiscreteInputs(ENABLE_COIL, 1);
+  modbusTCPServer.configureInputRegisters(BRIGHTNESS_INPUT_REG, 1);
+  modbusTCPServer.configureInputRegisters(COLOR_INPUT_REG, COLOR_INPUT_REG_LENGTH);
 
+  modbusTCPServer.inputRegisterWrite(BRIGHTNESS_INPUT_REG, 128);
+
+  pixel.setBrightness(255);
+  pixel.show();
 
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  runner.execute();
+  if(!ethClient){
+    ethClient = ethServer.available();
+    if(!ethClient)
+      return;
+    modbusTCPServer.accept(ethClient);
+  }
+
+  if(ethClient.connected())
+    modbusTCPServer.poll();
+  else
+    modbusTCPServer.end();
+
+  
+  if(modbusTCPServer.coilRead(ENABLE_COIL) != prev_en){
+    prev_en = modbusTCPServer.coilRead(ENABLE_COIL);
+    count++;
+  }
+  
+  // only do something if there is a change
+  if(modbusTCPServer.inputRegisterRead(BRIGHTNESS_INPUT_REG) != prev_brightness){ 
+    prev_brightness = modbusTCPServer.inputRegisterRead(BRIGHTNESS_INPUT_REG);
+    count++;
+  }
+
+  if(modbusTCPServer.inputRegisterRead(RED_INPUT_REG) != prev_r){
+    prev_r = modbusTCPServer.inputRegisterRead(RED_INPUT_REG);
+    count++;
+  }
+  else if(modbusTCPServer.inputRegisterRead(GREEN_INPUT_REG) != prev_g){
+    prev_g = modbusTCPServer.inputRegisterRead(GREEN_INPUT_REG);
+    count++;
+  }
+  else if(modbusTCPServer.inputRegisterRead(BLUE_INPUT_REG) != prev_b){
+    prev_b = modbusTCPServer.inputRegisterRead(BLUE_INPUT_REG);
+    count++;
+  }
+
+  if(count > 0){
+    pixel.setPixelColor(0, prev_r, prev_g, prev_b);
+    pixel.setBrightness(prev_brightness);
+    if(!prev_en)
+      pixel.setBrightness(0);
+    pixel.show();
+  }
+  
 }
 
-void add_client(){
-  return;
-}
-
-void remove_client(uint8_t id){
-  // remove requested client
-  /* 
-  reduce list size to and ensure that all active ids are in the lowest
-  possible spot in the array
-  */
-  return;
-}
-
-void modbus_server_callback(){
-  // check if there are any clients waiting
-  // assign the client to a location in the struct
-  // enable the client task if num_clients > 1
-  // if too many clients ignore and loop
-  return;
-}
-
-void modbus_client_callback(){
-  // check which client we are checking
-  // is client still connected? if no close and remove
-  // service request from client
-  // 
-  return;
-}
