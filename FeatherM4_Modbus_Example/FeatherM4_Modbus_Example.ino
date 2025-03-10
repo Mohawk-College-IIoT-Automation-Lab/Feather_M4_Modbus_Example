@@ -61,6 +61,8 @@ void setup() {
   Serial.begin(9600);
     while(!Serial){ }
   
+  DEBUG_PRINTLN(" ");
+
   // start the Modbus TCP server, if it fails to initialize kill the application by waiting forever
   if(!setupModbus(&modbusTCPServer, UID, (uint8_t*)mac_addr, (uint8_t*)ip_addr)){
     DEBUG_PRINTLN("Failed to init Modbus TCP Server");
@@ -86,10 +88,11 @@ void loop() {
 
   // check if the ethernet client has been initialized or if it's not connected
   ethClient = ethServer.available(); // accept an available client 
-  DEBUG_PRINTLN("Tried to accept a client on Etherenet Server");
+  DEBUG_PRINT("- ");
 
   // if the ethernet client has been initialized
   if(ethClient){ 
+    DEBUG_PRINTLN(" ");
     DEBUG_PRINTLN("EthernetClient available");
     
     modbusTCPServer.accept(ethClient);    // accept the new connection
@@ -116,8 +119,8 @@ void loop() {
 
       }
       else{ // if the ethernet client is disconnected
-        delay(10); // delay 10 ms
-        DEBUG_PRINTLN("No changes made via Modbus");
+        delay(100); // delay 100 ms
+        DEBUG_PRINT(". ");
       }
     }   
     // when the ethernet client has disconnected
@@ -125,13 +128,8 @@ void loop() {
     DEBUG_PRINTLN("Client disconnected");
   }
 }
-
 /* --- FUNCTION DEFS --- */
 uint8_t setupModbus(ModbusTCPServer * m_server, uint8_t UID, uint8_t mac[5], uint8_t ip[4]){
-  // try to begin the modbus server
-  if (!m_server->begin())  
-    return 0; // returns 0 if it failes
-
   // configure discrete inputs
   m_server->configureDiscreteInputs(ENABLE_DS_INPUT, 1);
 
@@ -143,6 +141,8 @@ uint8_t setupModbus(ModbusTCPServer * m_server, uint8_t UID, uint8_t mac[5], uin
   m_server->configureHoldingRegisters(UID_REG, 1);
   m_server->configureHoldingRegisters(MAC_ADDR_0_REG, MAC_ADDR_LENGTH);
   m_server->configureHoldingRegisters(IP_ADDR_0_REG, IP_ADDR_LENGTH);
+
+  m_server->discreteInputWrite(ENABLE_DS_INPUT, 0);
 
   // write default values to holding registers
   m_server->holdingRegisterWrite(UID_REG, UID);
@@ -160,8 +160,8 @@ uint8_t setupModbus(ModbusTCPServer * m_server, uint8_t UID, uint8_t mac[5], uin
 
   // write default values to input registers
   m_server->inputRegisterWrite(BRIGHTNESS_INPUT_REG, 128);
-
-  return 1;
+  
+  return m_server->begin();
 }
 
 uint8_t setupEthernet(EthernetServer *e_server, uint8_t mac[5], IPAddress ip, uint8_t ss_pin){

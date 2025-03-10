@@ -19,7 +19,7 @@
 #define COLOR_INPUT_REG_LENGTH 3
 
 /* --- HOLDING REGISTERS --- */
-#define UID_REG 4000
+#define UID_REG 40001
 
 #define MAC_ADDR_0_REG 40002
 #define MAC_ADDR_1_REG 40003
