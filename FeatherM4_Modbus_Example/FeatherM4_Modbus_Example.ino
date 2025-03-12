@@ -28,6 +28,7 @@ ModbusTCPServer modbusTCPServer;
 Adafruit_NeoPixel pixel(1, NEO_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
 uint8_t prev_brightness = 0, prev_r = 0, prev_g = 0, prev_b = 0, prev_en = 0, count = 0, temp = 0;
+int poll_val;
 
 /* --- FUNCTION PROTOTYPES --- */
 /**
@@ -88,7 +89,6 @@ void loop() {
 
   // check if the ethernet client has been initialized or if it's not connected
   ethClient = ethServer.available(); // accept an available client 
-  DEBUG_PRINT("- ");
 
   // if the ethernet client has been initialized
   if(ethClient){ 
@@ -104,7 +104,10 @@ void loop() {
     while(ethClient.connected()){
 
       // poll the modbus server, returns true if a change has been made         
-      if(modbusTCPServer.poll()){
+      poll_val = modbusTCPServer.poll();
+      
+      if(poll_val){
+        DEBUG_PRINT("Poll: "); DEBUG_PRINTLN(poll_val);
         // Any time there is a change the device will read each of the registers that it has, this is not efficient if there are many registers
         DEBUG_PRINTLN("Modbus server poll success");
 
@@ -120,7 +123,6 @@ void loop() {
       }
       else{ // if the ethernet client is disconnected
         delay(100); // delay 100 ms
-        DEBUG_PRINT(". ");
       }
     }   
     // when the ethernet client has disconnected
@@ -129,7 +131,7 @@ void loop() {
   }
 }
 /* --- FUNCTION DEFS --- */
-uint8_t setupModbus(ModbusTCPServer * m_server, uint8_t UID, uint8_t mac[5], uint8_t ip[4]){
+uint8_t setupModbus(ModbusTCPServer * m_server, uint8_t uid, uint8_t mac[5], uint8_t ip[4]){
   // configure discrete inputs
   m_server->configureDiscreteInputs(ENABLE_DS_INPUT, 1);
 
@@ -145,7 +147,8 @@ uint8_t setupModbus(ModbusTCPServer * m_server, uint8_t UID, uint8_t mac[5], uin
   m_server->discreteInputWrite(ENABLE_DS_INPUT, 0);
 
   // write default values to holding registers
-  m_server->holdingRegisterWrite(UID_REG, UID);
+  m_server->holdingRegisterWrite(UID_REG, uid);
+  DEBUG_PRINT("UID: "); DEBUG_PRINTLN(uid);
 
   m_server->holdingRegisterWrite(MAC_ADDR_0_REG, mac[0]);
   m_server->holdingRegisterWrite(MAC_ADDR_1_REG, mac[1]);
@@ -161,7 +164,7 @@ uint8_t setupModbus(ModbusTCPServer * m_server, uint8_t UID, uint8_t mac[5], uin
   // write default values to input registers
   m_server->inputRegisterWrite(BRIGHTNESS_INPUT_REG, 128);
   
-  return m_server->begin();
+  return m_server->begin(uid);
 }
 
 uint8_t setupEthernet(EthernetServer *e_server, uint8_t mac[5], IPAddress ip, uint8_t ss_pin){
